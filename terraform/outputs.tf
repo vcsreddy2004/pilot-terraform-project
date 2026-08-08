@@ -15,10 +15,10 @@ output "public_subnet2" {
   value = aws_subnet.public2.id
 
 }
-output "ec2_public_ip" {
-  value = aws_instance.web.public_ip
-}
-
 output "ec2_public_dns" {
   value = aws_instance.web.public_dns
+}
+output "ec2_public_ip" {
+  description = "Elastic IP of the backend EC2 instance"
+  value       = aws_eip.backend.public_ip
 }

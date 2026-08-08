@@ -91,14 +91,6 @@ resource "aws_security_group" "ec2_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Restrict to your IP in production
-  }
-
-  ingress {
     description = "HTTP"
     from_port   = 80
     to_port     = 80
@@ -123,7 +115,41 @@ resource "aws_instance" "web" {
   subnet_id              = aws_subnet.public1.id
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
   associate_public_ip_address = true
+  iam_instance_profile = aws_iam_instance_profile.ec2.name
   tags = {
     Name = "${var.project_name}-ec2"
   }
+}
+resource "aws_eip" "backend" {
+  domain = "vpc"
+}
+
+resource "aws_eip_association" "backend" {
+  instance_id   = aws_instance.web.id
+  allocation_id = aws_eip.backend.id
+}
+resource "aws_iam_role" "ec2_ssm_role" {
+  name = "${var.project_name}-ec2-ssm-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [{
+      Effect = "Allow"
+
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+resource "aws_iam_instance_profile" "ec2" {
+  name = "${var.project_name}-ec2-profile"
+  role = aws_iam_role.ec2_ssm_role.name
+}
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  role       = aws_iam_role.ec2_ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
