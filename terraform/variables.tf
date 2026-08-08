@@ -1,5 +1,5 @@
 variable "aws_region" {
-  default = "ap-sount-2"
+  default = "ap-south-2"
 }
 variable "project_name" {
   default = "venomai"
