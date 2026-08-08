@@ -1,0 +1,12 @@
+import { Router } from "express";
+import { protect } from "../../middleware/auth.middleware";
+import { restrictTo } from "../../middleware/role.middleware";
+import * as productController from "./product.controller";
+import {upload} from "../../middleware/upload";
+const router = Router();
+router.post("/",protect,restrictTo("admin"),upload.array("image", 5),productController.createProduct);
+router.get("/", productController.getProducts);
+router.get("/:slug", productController.getProducts);
+router.put("/:slug",protect,restrictTo("admin"),productController.updateStockController);
+router.delete("/:slug",protect,restrictTo("admin"),productController.deleteProduct);
+export default router;

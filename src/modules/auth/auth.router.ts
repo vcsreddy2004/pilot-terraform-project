@@ -1,0 +1,12 @@
+import { Router } from "express";
+import * as authController from "./auth.controller";
+const router = Router();
+router.post("/register", authController.createUser);
+router.post("/login",authController.login);
+router.post("/logout",authController.logout);
+router.post("/refresh",authController.refreshAccessToken);
+router.post("/otp/email",authController.sendVerificationOTP);
+router.post("/otp/verify",authController.verifyOTP);
+router.post("/otp/email/forget-password",authController.sendForgetPasswordOTP);
+router.post("/otp/email/update-password",authController.updateForgotPassword);
+export default router;
