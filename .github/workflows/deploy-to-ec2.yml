@@ -16,49 +16,44 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Debug OIDC claims
-        uses: github/actions-oidc-debugger@main
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
           role-session-name: github-actions-deploy
-
-      - name: Install AWS CLI
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y unzip
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install
-
-      - name: Run deployment command on EC2
+      - name: Find EC2 instance
+        id: ec2
         run: |
           INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=${{ secrets.EC2_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].InstanceId" --output text)
-
-          if [ "$INSTANCE_ID" = "none" ] || [ -z "$INSTANCE_ID" ]; then
+            --filters \
+              "Name=tag:Name,Values=${{ secrets.EC2_INSTANCE_NAME }}" \
+              "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text)
+          if [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
             echo "EC2 instance not found or not running"
             exit 1
           fi
+          echo "Found EC2: $INSTANCE_ID"
+          echo "INSTANCE_ID=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
 
+      - name: Deploy to EC2 through SSM
+        run: |
           aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
+            --instance-ids "${{ steps.ec2.outputs.INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy backend from GitHub to EC2" \
-            --parameters commands=[
+            --parameters 'commands=[
               "cd /var/www/backend",
               "git fetch --all --prune",
-              "git checkout $GITHUB_REF_NAME",
-              "git reset --hard origin/$GITHUB_REF_NAME",
+              "git checkout main",
+              "git reset --hard origin/main",
               "npm install",
               "npm run build",
               "pm2 restart venomai-backend || pm2 start dist/server.js --name venomai-backend"
-            ]
-            --region ${{ secrets.AWS_REGION }}
+            ]' \
+            --region "${{ secrets.AWS_REGION }}"
 
-      - name: Wait for deployment
-        run: |
-          echo "Deployment command sent. Check EC2 SSM command status in AWS Console."
+      - name: Deployment submitted
+        run: echo "Deployment command sent to EC2."
