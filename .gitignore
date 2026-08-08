@@ -34,6 +34,7 @@ temp/
 
 # Coverage
 coverage/
+# Terraform
 .terraform/
 *.tfstate
 *.tfstate.*
