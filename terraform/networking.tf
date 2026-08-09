@@ -193,18 +193,6 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   role       = aws_iam_role.ec2_ssm_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
-data "aws_caller_identity" "current" {}
-resource "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
-
-  client_id_list = [
-    "sts.amazonaws.com"
-  ]
-
-  tags = {
-    Name = "${var.project_name}-github-oidc"
-  }
-}
 resource "aws_iam_role" "github_actions" {
   name = "${var.project_name}-github-actions-role"
   assume_role_policy = jsonencode({
@@ -261,3 +249,14 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
     ]
   })
 }
+resource "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = [
+    "sts.amazonaws.com"
+  ]
+
+  tags = {
+    Name = "${var.project_name}-github-oidc"
+  }
+}   
