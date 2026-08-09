@@ -207,7 +207,12 @@ resource "aws_iam_role" "github_actions" {
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:environment:${var.github_environment}"
+          }
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:${var.github_repository}:environment:${var.github_environment}",
+              "repo:vcsreddy2004@*/pilot-terraform-project@*:environment:env"
+            ]
           }
         }
       }
