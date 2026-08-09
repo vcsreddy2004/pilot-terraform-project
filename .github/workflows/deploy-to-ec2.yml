@@ -13,5 +13,5 @@ jobs:
     environment: env
 
     steps:
-      - name: Debug OIDC claim
+      - name: Debug OIDC claims
         uses: github/actions-oidc-debugger@main
