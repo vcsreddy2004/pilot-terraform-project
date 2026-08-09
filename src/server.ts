@@ -61,7 +61,7 @@ const startServer = async () => {
         await sequelize.authenticate(); 
         console.log("Database connected successfully");
         if(config.PORT) {
-            app.listen(config.PORT,()=>{
+            app.listen(config.PORT,,"0.0.0.0",()=>{
                 console.log("server started");
             })
         }

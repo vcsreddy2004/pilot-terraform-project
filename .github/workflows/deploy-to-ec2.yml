@@ -1,59 +1,61 @@
-name: Deploy to EC2
+name: Deploy Express Backend
 
 on:
   push:
     branches:
       - main
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     environment: env
-    permissions:
-      contents: read
-      id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
           role-session-name: github-actions-deploy
+
       - name: Find EC2 instance
         id: ec2
+        shell: bash
         run: |
           INSTANCE_ID=$(aws ec2 describe-instances \
             --filters \
-              "Name=tag:Name,Values=${{ secrets.EC2_INSTANCE_NAME }}" \
+              "Name=tag:Name,Values=venomai-ec2" \
               "Name=instance-state-name,Values=running" \
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text)
+
           if [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
             echo "EC2 instance not found or not running"
             exit 1
           fi
+
           echo "Found EC2: $INSTANCE_ID"
           echo "INSTANCE_ID=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy to EC2 through SSM
+      - name: Deploy through SSM
         run: |
           aws ssm send-command \
             --instance-ids "${{ steps.ec2.outputs.INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy backend from GitHub to EC2" \
+            --comment "Deploy Express backend" \
             --parameters 'commands=[
-              "cd /var/www/backend",
-              "git fetch --all --prune",
-              "git checkout main",
-              "git reset --hard origin/main",
-              "npm install",
-              "npm run build",
-              "pm2 restart venomai-backend || pm2 start dist/server.js --name venomai-backend"
+              "echo Deployment started",
+              "node --version",
+              "npm --version",
+              "pm2 --version",
+              "mkdir -p /var/www/backend"
             ]' \
             --region "${{ secrets.AWS_REGION }}"
-
-      - name: Deployment submitted
-        run: echo "Deployment command sent to EC2."

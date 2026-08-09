@@ -87,7 +87,7 @@ resource "aws_route_table_association" "public2" {
 }
 resource "aws_security_group" "ec2_sg" {
   name        = "${var.project_name}-ec2-sg"
-  description = "Allow SSH and HTTP"
+  description = "Allow HTTP"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -110,12 +110,52 @@ resource "aws_security_group" "ec2_sg" {
   }
 }
 resource "aws_instance" "web" {
-  ami                    = var.ami_id
-  instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.public1.id
-  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.public1.id
+  vpc_security_group_ids      = [aws_security_group.ec2_sg.id]
   associate_public_ip_address = true
-  iam_instance_profile = aws_iam_instance_profile.ec2.name
+  iam_instance_profile        = aws_iam_instance_profile.ec2.name
+  user_data                   = <<-EOF
+    #!/bin/bash
+
+    set -e
+
+    echo "Starting EC2 bootstrap..."
+
+    # Update packages
+    apt-get update -y
+    apt-get upgrade -y
+
+    # Install required packages
+    apt-get install -y curl git nginx unzip
+
+    # Install Node.js 22
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    apt-get install -y nodejs
+
+    # Verify Node.js
+    node --version
+    npm --version
+
+    # Install PM2 globally
+    npm install -g pm2
+
+    # Create application directory
+    mkdir -p /var/www/backend
+
+    # Set ownership
+    chown -R ubuntu:ubuntu /var/www/backend
+
+    # Enable Nginx
+    systemctl enable nginx
+    systemctl start nginx
+
+    # Enable SSM Agent
+    systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+    systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service || true
+    echo "EC2 bootstrap completed successfully."
+  EOF
   tags = {
     Name = "${var.project_name}-ec2"
   }
@@ -152,4 +192,72 @@ resource "aws_iam_instance_profile" "ec2" {
 resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   role       = aws_iam_role.ec2_ssm_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+data "aws_caller_identity" "current" {}
+resource "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = [
+    "sts.amazonaws.com"
+  ]
+
+  tags = {
+    Name = "${var.project_name}-github-oidc"
+  }
+}
+resource "aws_iam_role" "github_actions" {
+  name = "${var.project_name}-github-actions-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.github.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:environment:${var.github_environment}"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-github-actions-role"
+  }
+}
+resource "aws_iam_role_policy" "github_actions_deploy" {
+  name = "${var.project_name}-github-actions-deploy"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ec2:DescribeInstances"
+        ]
+
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ssm:SendCommand",
+          "ssm:GetCommandInvocation",
+          "ssm:ListCommandInvocations"
+        ]
+
+        Resource = "*"
+      }
+    ]
+  })
 }
